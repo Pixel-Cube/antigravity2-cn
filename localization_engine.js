@@ -260,6 +260,11 @@ function generateJs() {
         return null;
     }
 
+    function isFilePathOrUri(s) {
+        if (!s) return false;
+        return /^[a-zA-Z]:[\\\\/]/.test(s) || /^[\\\\/~].*[\\\\/]/.test(s) || /[\\\\/]SKILL\\.md/i.test(s) || /[\\\\/]\\.gemini[\\\\/]/i.test(s) || /^file:\\/\\//i.test(s);
+    }
+
     function translateNode(node) {
         try {
             if (!node) return;
@@ -273,6 +278,7 @@ function generateJs() {
                     const v = node.getAttribute(attr);
                     if (v) {
                         const t = norm(v);
+                        if (isFilePathOrUri(t)) continue;
                         const shortcutTrans = translateWithShortcut(t);
                         if (shortcutTrans) node.setAttribute(attr, shortcutTrans);
                         else if (map.has(t)) node.setAttribute(attr, map.get(t));
@@ -295,6 +301,21 @@ function generateJs() {
                             node.setAttribute(attr, trans);
                         } else if (/^Hide\\s+breakdown(s)?$/i.test(t)) {
                             node.setAttribute(attr, USE_TW ? "收起明細" : "收起细目");
+                        } else if (/^See\\s+(\\d+)\\s+more(?:\\s+(.+))?$/i.test(t)) {
+                            const trans = t.replace(/^See\\s+(\\d+)\\s+more(?:\\s+(.+))?$/i, (m, num) => {
+                                return USE_TW ? ("展開另外 " + num + " 項") : ("展开另外 " + num + " 项");
+                            });
+                            node.setAttribute(attr, trans);
+                        } else if (/^See\\s+more\\s+in\\s+(.+)$/i.test(t)) {
+                            const trans = t.replace(/^See\\s+more\\s+in\\s+(.+)$/i, (m, name) => {
+                                return USE_TW ? ("在 " + name + " 中展開更多") : ("在 " + name + " 中展开更多");
+                            });
+                            node.setAttribute(attr, trans);
+                        } else if (/^See\\s+less\\s+in\\s+(.+)$/i.test(t)) {
+                            const trans = t.replace(/^See\\s+less\\s+in\\s+(.+)$/i, (m, name) => {
+                                return USE_TW ? ("在 " + name + " 中收起") : ("在 " + name + " 中收起");
+                            });
+                            node.setAttribute(attr, trans);
                         } else if (/^(?:(Permanently delete)\\s+)?(.+?)\\s+including\\s+(\\d+)\\s+active conversations?([.。])?$/i.test(t)) {
                             const trans = t.replace(/^(?:(Permanently delete)\\s+)?(.+?)\\s+including\\s+(\\d+)\\s+active conversations?([.。])?$/i, (match, del, name, count, dot) => {
                                 const delPrefix = del ? (USE_TW ? "永久刪除 " : "永久删除 ") : "";
@@ -345,6 +366,7 @@ function generateJs() {
 
                 // 处理 FastPick / 列表底部由于 React 节点拆分导致的 "Show ", num, " more..." 分段文本
                 const parentText = node.parentElement && node.parentElement.textContent ? node.parentElement.textContent.trim() : '';
+                if (isFilePathOrUri(originalVal.trim()) || isFilePathOrUri(parentText)) return;
                 if (parentText && (
                     /^(?:Show|显示另外|顯示另外)\\s+\\d+\\s+(?:more|个|個)(?:\\.\\.\\.|…)?$/i.test(parentText) ||
                     (node.parentElement.getAttribute && node.parentElement.getAttribute('value')?.startsWith('fastpick-show-more:'))
@@ -411,65 +433,196 @@ function generateJs() {
                         node.parentElement.textContent.includes('隱私權政策')
                     )
                 )) {
-                    newVal = USE_TW ? "以及" : "以及";
-                } else if (/^The AlloyDB for PostgreSQL remote/i.test(valNorm)) {
-                    newVal = USE_TW ? "AlloyDB for PostgreSQL 遠端 MCP 伺服器可讓您存取並執行 AlloyDB 工具，用於管理 AlloyDB 叢集及執行個體、管理使用者，以及建立和復原資料備份。" : "AlloyDB for PostgreSQL 远程 MCP 服务器可让您访问并运行 AlloyDB 工具，用于管理 AlloyDB 集群及实例、管理用户，以及创建和恢复数据备份。";
-                } else if (/^The Cloud SQL remote/i.test(valNorm)) {
-                    newVal = USE_TW ? "Cloud SQL 遠端 MCP 伺服器可讓您存取並執行 Cloud SQL 工具，用於管理 Cloud SQL 執行個體、管理使用者、建立和復原資料備份及資料庫維運。" : "Cloud SQL 远程 MCP 服务器可让您访问并运行 Cloud SQL 工具，用于管理 Cloud SQL 实例、管理用户、创建和恢复数据备份及数据库运维。";
-                } else if (/^The Spanner remote/i.test(valNorm)) {
-                    newVal = USE_TW ? "Spanner 遠端 MCP 伺服器可讓您從 AI 開發環境中存取並執行 Spanner 工具，以建立、管理和查詢分散式資料庫資源。" : "Spanner 远程 MCP 服务器可让您从 AI 开发环境中访问并运行 Spanner 工具，以创建、管理和查询分布式数据库资源。";
-                } else if (/^Ask questions\.\s*Get answers\./i.test(valNorm) || /PostHog data/i.test(valNorm)) {
-                    newVal = USE_TW ? "提問，即得答案。該 MCP 是供您的程式設計代理呼叫的伺服器。用英語提出問題，它會針對您的 PostHog 資料執行查詢，結果將直接呈現在您的編輯器中。" : "提问，即得答案。该 MCP 是供您的编程智能体调用的服务器。用英语提出问题，它会针对您的 PostHog 数据运行查询，结果将直接呈现在您的编辑器中。";
-                } else if (/^The GKE remote MCP server/i.test(valNorm)) {
-                    newVal = USE_TW ? "GKE 遠端 MCP 伺服器提供對 GKE Kubernetes 資源的讀寫存取權限。允許 AI 代理檢查並監控您的執行環境。" : "GKE 远程 MCP 服务器提供对 GKE Kubernetes 资源的读写权限。允许 AI 智能体检查并监控您的运行环境。";
-                } else if (/^Cloud CLI MCP Server/i.test(valNorm)) {
-                    newVal = USE_TW ? "Cloud CLI MCP 伺服器提供在遠端沙箱環境中執行 gcloud 與 bq CLI 指令的工具集。" : "Cloud CLI MCP 服务器提供在远程沙箱环境中运行 gcloud 与 bq CLI 命令的工具集。";
-                } else if (/^The Apigee API hub remote MCP server/i.test(valNorm)) {
-                    newVal = USE_TW ? "Apigee API hub 遠端 MCP 伺服器可讓您管理註冊在 Apigee API hub 中的 API、版本、規格、操作、部署、屬性、外部 API 以及相依性。" : "Apigee API hub 远程 MCP 服务器可让您管理注册在 Apigee API hub 中的 API、版本、规范、操作、部署、属性、外部 API 以及依赖项。";
-                } else if (/^The Google Home Developer MCP server/i.test(valNorm)) {
-                    newVal = USE_TW ? "Google Home Developer MCP 伺服器支援檢索 Google Home 文件、OpenThread 與 Matter 規格文件。" : "Google Home Developer MCP 服务器支持检索 Google Home 文档、OpenThread 与 Matter 规范文档。";
-                } else if (/^The Cloud Quotas MCP server/i.test(valNorm)) {
-                    newVal = USE_TW ? "Cloud Quotas MCP 伺服器支援檢視配額分配、申請提升配額以及管理 Quota Adjuster 自動調整設定。" : "Cloud Quotas MCP 服务器支持查看配额分配、申请提升配额以及管理 Quota Adjuster 自动调整配置。";
-                } else if (/^Build, edit, deploy, and manage full-stack web apps with Lovable/i.test(valNorm)) {
-                    newVal = USE_TW ? "使用自然語言，藉助 AI 應用程式建構工具 Lovable 建構、編輯、部署和管理全端 Web 應用程式。該 MCP 伺服器將您的 AI 用戶端連接至 Lovable，允許您的 AI 代理直接在偏好的編輯器或助手內互動、建立和管理 Lovable 專案。" : "使用自然语言，借助 AI 应用构建工具 Lovable 构建、编辑、部署和管理全栈 Web 应用。该 MCP 服务器将您的 AI 客户端连接至 Lovable，允许您的 AI 智能体直接在偏好的编辑器或助手中交互、创建和管理 Lovable 项目。";
-                } else if (/^Build applications with the Gemini Interactions API and Live API/i.test(valNorm)) {
-                    newVal = USE_TW ? "使用 Gemini Interactions API 與 Live API 建構應用程式，涵蓋文字生成、多輪對話、串流、函式呼叫、託管代理及即時音訊與視訊互動。" : "使用 Gemini Interactions API 和 Live API 构建应用，涵盖文本生成、多轮对话、流式传输、函数调用、托管智能体以及实时音视频交互。";
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?, (\\d+) hours?\\.?$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?, (\\d+) hours?\\.?$/i, (match, d, h) => {
-                        return USE_TW ? (d + " 天 " + h + " 小時後更新") : (d + " 天 " + h + " 小时后刷新");
-                    });
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?, (\\d+) minutes?\\.?$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?, (\\d+) minutes?\\.?$/i, (match, h, m) => {
-                        return USE_TW ? (h + " 小時 " + m + " 分鐘後更新") : (h + " 小时 " + m + " 分钟后刷新");
-                    });
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?\\.?$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?\\.?$/i, (match, d) => {
-                        return USE_TW ? (d + " 天後更新") : (d + " 天后刷新");
-                    });
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?\\.?$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?\\.?$/i, (match, h) => {
-                        return USE_TW ? (h + " 小時後更新") : (h + " 小时后刷新");
-                    });
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) minutes?\\.?$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) minutes?\\.?$/i, (match, m) => {
-                        return USE_TW ? (m + " 分鐘後更新") : (m + " 分钟后刷新");
-                    });
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in less than a minute\\.?$/i.test(valNorm)) {
-                    newVal = USE_TW ? "不到 1 分鐘後更新" : "不到 1 分钟后刷新";
-                } else if (/^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in a few seconds\\.?$/i.test(valNorm)) {
-                    newVal = USE_TW ? "幾秒後更新" : "几秒后刷新";
-                } else if (/^Learn more about$/i.test(valNorm)) {
-                    newVal = USE_TW ? "瞭解更多關於" : "了解更多关于";
-                } else if (/^Learn more about (.+)$/i.test(valNorm)) {
-                    newVal = valNorm.replace(/^Learn more about (.+)$/i, (match, p) => {
-                        let translatedPreset = p;
-                        const pLow = p.toLowerCase();
-                        if (pLow === 'default' || pLow.includes('默认') || pLow.includes('預設')) translatedPreset = USE_TW ? "預設 (Default)" : "默认 (Default)";
-                        else if (pLow === 'full machine' || pLow.includes('全机') || pLow.includes('全機')) translatedPreset = USE_TW ? "全機存取 (Full Machine)" : "全机访问 (Full Machine)";
-                        else if (pLow === 'turbo mode' || pLow.includes('极速') || pLow.includes('極速')) translatedPreset = USE_TW ? "極速模式 (Turbo Mode)" : "极速模式 (Turbo Mode)";
-                        else if (pLow === 'custom' || pLow.includes('自定义') || pLow.includes('自訂')) translatedPreset = USE_TW ? "自訂 (Custom)" : "自定义 (Custom)";
-                        return USE_TW ? ("瞭解更多關於 " + translatedPreset + " 的詳細資訊") : ("了解更多关于 " + translatedPreset + " 的信息");
-                    });
+          newVal = USE_TW ? '以及' : '以及';
+        } else if (
+            valNorm === 'including'
+            && node.parentElement
+            && node.parentElement.textContent
+            && (node.parentElement.textContent.includes('Permanently delete')
+                || node.parentElement.textContent.includes('永久删除')
+                || node.parentElement.textContent.includes('永久刪除'))
+        ) {
+          newVal = USE_TW ? '，包含 ' : '，包含 ';
+        } else if (
+            valNorm === '.'
+            && node.parentElement
+            && node.parentElement.textContent
+            && (node.parentElement.textContent.includes('Permanently delete')
+                || node.parentElement.textContent.includes('永久删除')
+                || node.parentElement.textContent.includes('永久刪除')
+                || node.parentElement.textContent.includes('View archived')
+                || node.parentElement.textContent.includes('已归档')
+                || node.parentElement.textContent.includes('已封存'))
+        ) {
+          newVal = '。';
+        } else if (/^The AlloyDB for PostgreSQL remote/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'AlloyDB for PostgreSQL 遠端 MCP 伺服器可讓您存取並執行 AlloyDB 工具，用於管理 AlloyDB 叢集及執行個體、管理使用者，以及建立和復原資料備份。'
+              : 'AlloyDB for PostgreSQL 远程 MCP 服务器可让您访问并运行 AlloyDB 工具，用于管理 AlloyDB 集群及实例、管理用户，以及创建和恢复数据备份。';
+        } else if (/^The Cloud SQL remote/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Cloud SQL 遠端 MCP 伺服器可讓您存取並執行 Cloud SQL 工具，用於管理 Cloud SQL 執行個體、管理使用者、建立和復原資料備份及資料庫維運。'
+              : 'Cloud SQL 远程 MCP 服务器可让您访问并运行 Cloud SQL 工具，用于管理 Cloud SQL 实例、管理用户、创建和恢复数据备份及数据库运维。';
+        } else if (/^The Spanner remote/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Spanner 遠端 MCP 伺服器可讓您從 AI 開發環境中存取並執行 Spanner 工具，以建立、管理和查詢分散式資料庫資源。'
+              : 'Spanner 远程 MCP 服务器可让您从 AI 开发环境中访问并运行 Spanner 工具，以创建、管理和查询分布式数据库资源。';
+        } else if (
+            /^Ask questions\.\s*Get answers\./i.test(valNorm)
+            || /PostHog data/i.test(valNorm)
+        ) {
+          newVal = USE_TW
+              ? '提問，即得答案。該 MCP 是供您的程式設計代理呼叫的伺服器。用英語提出問題，它會針對您的 PostHog 資料執行查詢，結果將直接呈現在您的編輯器中。'
+              : '提问，即得答案。该 MCP 是供您的编程智能体调用的服务器。用英语提出问题，它会针对您的 PostHog 数据运行查询，结果将直接呈现在您的编辑器中。';
+        } else if (/^The GKE remote MCP server/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'GKE 遠端 MCP 伺服器提供對 GKE Kubernetes 資源的讀寫存取權限。允許 AI 代理檢查並監控您的執行環境。'
+              : 'GKE 远程 MCP 服务器提供对 GKE Kubernetes 资源的读写权限。允许 AI 智能体检查并监控您的运行环境。';
+        } else if (/^Cloud CLI MCP Server/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Cloud CLI MCP 伺服器提供在遠端沙箱環境中執行 gcloud 與 bq CLI 指令的工具集。'
+              : 'Cloud CLI MCP 服务器提供在远程沙箱环境中运行 gcloud 与 bq CLI 命令的工具集。';
+        } else if (/^The Apigee API hub remote MCP server/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Apigee API hub 遠端 MCP 伺服器可讓您管理註冊在 Apigee API hub 中的 API、版本、規格、操作、部署、屬性、外部 API 以及相依性。'
+              : 'Apigee API hub 远程 MCP 服务器可让您管理注册在 Apigee API hub 中的 API、版本、规范、操作、部署、属性、外部 API 以及依赖项。';
+        } else if (/^The Google Home Developer MCP server/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Google Home Developer MCP 伺服器支援檢索 Google Home 文件、OpenThread 與 Matter 規格文件。'
+              : 'Google Home Developer MCP 服务器支持检索 Google Home 文档、OpenThread 与 Matter 规范文档。';
+        } else if (/^The Cloud Quotas MCP server/i.test(valNorm)) {
+          newVal = USE_TW
+              ? 'Cloud Quotas MCP 伺服器支援檢視配額分配、申請提升配額以及管理 Quota Adjuster 自動調整設定。'
+              : 'Cloud Quotas MCP 服务器支持查看配额分配、申请提升配额以及管理 Quota Adjuster 自动调整配置。';
+        } else if (
+            /^Build, edit, deploy, and manage full-stack web apps with Lovable/i.test(
+                valNorm
+            )
+        ) {
+          newVal = USE_TW
+              ? '使用自然語言，藉助 AI 應用程式建構工具 Lovable 建構、編輯、部署和管理全端 Web 應用程式。該 MCP 伺服器將您的 AI 用戶端連接至 Lovable，允許您的 AI 代理直接在偏好的編輯器或助手內互動、建立和管理 Lovable 專案。'
+              : '使用自然语言，借助 AI 应用构建工具 Lovable 构建、编辑、部署和管理全栈 Web 应用。该 MCP 服务器将您的 AI 客户端连接至 Lovable，允许您的 AI 智能体直接在偏好的编辑器或助手中交互、创建和管理 Lovable 项目。';
+        } else if (
+            /^Build applications with the Gemini Interactions API and Live API/i.test(
+                valNorm
+            )
+        ) {
+          newVal = USE_TW
+              ? '使用 Gemini Interactions API 與 Live API 建構應用程式，涵蓋文字生成、多輪對話、串流、函式呼叫、託管代理及即時音訊與視訊互動。'
+              : '使用 Gemini Interactions API 和 Live API 构建应用，涵盖文本生成、多轮对话、流式传输、函数调用、托管智能体以及实时音视频交互。';
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?, (\\d+) hours?\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = valNorm.replace(
+              /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?, (\\d+) hours?\\.?$/i,
+              (match, d, h) => {
+                return USE_TW
+                    ? d + ' 天 ' + h + ' 小時後更新'
+                    : d + ' 天 ' + h + ' 小时后刷新';
+              }
+          );
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?, (\\d+) minutes?\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = valNorm.replace(
+              /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?, (\\d+) minutes?\\.?$/i,
+              (match, h, m) => {
+                return USE_TW
+                    ? h + ' 小時 ' + m + ' 分鐘後更新'
+                    : h + ' 小时 ' + m + ' 分钟后刷新';
+              }
+          );
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = valNorm.replace(
+              /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) days?\\.?$/i,
+              (match, d) => {
+                return USE_TW ? d + ' 天後更新' : d + ' 天后刷新';
+              }
+          );
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = valNorm.replace(
+              /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) hours?\\.?$/i,
+              (match, h) => {
+                return USE_TW ? h + ' 小時後更新' : h + ' 小时后刷新';
+              }
+          );
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) minutes?\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = valNorm.replace(
+              /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in (\\d+) minutes?\\.?$/i,
+              (match, m) => {
+                return USE_TW ? m + ' 分鐘後更新' : m + ' 分钟后刷新';
+              }
+          );
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in less than a minute\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = USE_TW ? '不到 1 分鐘後更新' : '不到 1 分钟后刷新';
+        } else if (
+            /^(?:Refreshes|You have (?:used (?:some|all) of|reached) your (?:weekly|5-hour) limit, it will fully refresh) in a few seconds\\.?$/i.test(
+                valNorm
+            )
+        ) {
+          newVal = USE_TW ? '幾秒後更新' : '几秒后刷新';
+        } else if (/^Learn more about$/i.test(valNorm)) {
+          newVal = USE_TW ? '瞭解更多關於' : '了解更多关于';
+        } else if (/^Learn more about (.+)$/i.test(valNorm)) {
+          newVal = valNorm.replace(/^Learn more about (.+)$/i, (match, p) => {
+            let translatedPreset = p;
+            const pLow = p.toLowerCase();
+            if (pLow === 'default' || pLow.includes('默认') || pLow.includes('預設'))
+              translatedPreset = USE_TW ? '預設 (Default)' : '默认 (Default)';
+            else if (
+                pLow === 'inherit global'
+                || pLow.includes('继承全局')
+                || pLow.includes('繼承全域')
+            )
+              translatedPreset = USE_TW
+                  ? '繼承全域 (Inherit Global)'
+                  : '继承全局 (Inherit Global)';
+            else if (
+                pLow === 'full machine'
+                || pLow.includes('全机')
+                || pLow.includes('全機')
+            )
+              translatedPreset = USE_TW
+                  ? '全機存取 (Full Machine)'
+                  : '全机访问 (Full Machine)';
+            else if (
+                pLow === 'turbo mode'
+                || pLow.includes('极速')
+                || pLow.includes('極速')
+            )
+              translatedPreset = USE_TW
+                  ? '極速模式 (Turbo Mode)'
+                  : '极速模式 (Turbo Mode)';
+            else if (
+                pLow === 'custom'
+                || pLow.includes('自定义')
+                || pLow.includes('自訂')
+            )
+              translatedPreset = USE_TW ? '自訂 (Custom)' : '自定义 (Custom)';
+            return USE_TW
+                ? '瞭解更多關於 ' + translatedPreset + ' 的詳細資訊'
+                : '了解更多关于 ' + translatedPreset + ' 的信息';
+          });
                 } else if (/^Yes, and always allow '(.+)' in this project$/i.test(valNorm)) {
                     newVal = valNorm.replace(/^Yes, and always allow '(.+)' in this project$/i, (match, cmd) => {
                         return USE_TW ? ("是，且在此專案中一律允許執行 '" + cmd + "'") : ("是，且在此项目中始终允许运行 '" + cmd + "'");
@@ -529,6 +682,11 @@ function generateJs() {
                 } else if (/^See all\\s*\\((\\d+)\\)$/i.test(valNorm)) {
                     newVal = valNorm.replace(/^See all\\s*\\((\\d+)\\)$/i, (match, num) => {
                         return USE_TW ? ("顯示全部 (" + num + ")") : ("显示全部 (" + num + ")");
+                    });
+                } else if (/^(?:\\+\\s*)?See\\s+(\\d+)\\s+more(?:\\s+(.+))?$/i.test(valNorm)) {
+                    newVal = valNorm.replace(/^(?:\\+\\s*)?See\\s+(\\d+)\\s+more(?:\\s+(.+))?$/i, (match, num) => {
+                        const hasPlus = /^\\+/.test(valNorm);
+                        return (hasPlus ? "+ " : "") + (USE_TW ? ("展開另外 " + num + " 項") : ("展开另外 " + num + " 项"));
                     });
                 } else if (/^Available AI Credits: (\\d+)$/i.test(valNorm)) {
                     newVal = valNorm.replace(/^Available AI Credits: (\\d+)$/i, (match, num) => {
@@ -628,9 +786,9 @@ function generateJs() {
                         return v + pm[2] + ' ' + n;
                     }).join('，');
                 } else {
-                    // 2. 长句子串滑动替换与末尾截断智能匹配 (仅当原句带有省略号截断时，才允许基于长前缀匹配)
+                    // 2. 长句子串滑动替换与末尾截断智能匹配 (仅当原句带有省略号截断时，才允许基于长前缀匹配；不含空格的标识符不进行子串替换)
                     for (const [key, translated] of longEntries) {
-                        if (key.length > 15 && valNorm.includes(key)) {
+                        if (key.length > 15 && key.includes(' ') && valNorm.includes(key)) {
                             newVal = newVal.split(key).join(translated);
                             break;
                         } else if ((valNorm.endsWith('...') || valNorm.endsWith('…')) && valNorm.length >= 35) {
